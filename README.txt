@@ -1,2 +1,4 @@
-This software allows you to let the user create client certificates and browse and download files in a directory tree for its client certificate id.
+This software implements a HTTPS server and allows the user to create client certificates for the browser in the browser.
+
+After this you can create a directory tree per certificate id and allow the client to browse it and download files.
 
