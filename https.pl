@@ -129,7 +129,6 @@ POE::Session->create(
                   if (my $file = readFile($p12name)) {
                      $response->push_header('Content-type', 'application/x-pkcs12');
                      $response->content($file);
-                     print "YEAH:".$p12name."\n";
                   } else {
                      $response->push_header('Content-type', 'text/html');
                      $response->content("ERROR: Empty key\n");
@@ -152,7 +151,6 @@ POE::Session->create(
                print "".join(" ", map { "'".$_."'" } @$cmd)."\n";
                system(@$cmd);
                $response->content(readFile($crtname));
-               #print "FILELEN:".length($file)."\n";
                $heap->{socket_wheel}->put($response);
                $kernel->delay(_stop => 5);
             } else {
