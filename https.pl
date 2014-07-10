@@ -209,7 +209,7 @@ POE::Session->create(
                      '<tr><td>Name</td><td><input name=name></td></tr>'.
                      "<tr><td>E-Mail</td><td><input name=email></td></tr>".
                      '<tr><td>Keysize</td><td><keygen challenge="replaceMe" keyparams="2048" keytype="rsa" name="newSPKAC"></keygen></td></tr>'.
-                     '<tr><td colspan=2><input type="submit" value="Generate certifiate" /></td></tr></table></form>';
+                     '<tr><td colspan=2><input type="submit" value="Create certificate" /></td></tr></table></form>';
                }
                if ($buf->uri =~ m,^/debug/,) {
                   $content .= "<hr>";
