@@ -44,6 +44,9 @@ POE::Session->create(
         FailureEvent => '_stop',
       );
     },
+    _stop => sub {
+       delete $_[HEAP]->{listener};
+    },
     socket_birth => sub {
       my ($socket) = $_[ARG0];
       POE::Session->create(
