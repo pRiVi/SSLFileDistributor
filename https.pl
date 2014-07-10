@@ -4,47 +4,34 @@ use strict;
 use warnings;
 use Socket;
 use POE qw(
-  Wheel::SocketFactory
-  Wheel::ReadWrite
-  Driver::SysRW
-  Filter::SSL
-  Filter::Stackable
-  Filter::HTTPD
+   Wheel::SocketFactory
+   Wheel::ReadWrite
+   Driver::SysRW
+   Filter::SSL
+   Filter::Stackable
+   Filter::HTTPD
 );
+
 my $capass = `cat /root/filed/capw.txt`;
 chomp($capass);
 my $datapath = "/tmp/testdata";
 my $datadir = "/data/";
+my $mkca = "/etc/mkca-dist";
 
 sub ReadForm {
    my @pairs = split(/&/, shift);
-  #if ($ENV{'REQUEST_METHOD'} eq 'GET') {
-  #  @pairs = split(/&/, $ENV{'QUERY_STRING'});
-  #}
-  #elsif ($ENV{'REQUEST_METHOD'} eq 'POST')
-  #{
-  #  read(STDIN, $buffer, $ENV{'CONTENT_LENGTH'});
-  #  @pairs = split(/&/, $buffer);
-  #}
- 
-  my $return = {}; 
-  foreach my $pair (@pairs)
-  {
-    my ($name, $value) = split(/=/, $pair);
-    #print $pair."\n",
-
-    $name =~ tr/+/ /;
-    $name =~ s/%([a-fA-F0-9][a-fA-F0-9])/pack("C", hex($1))/eg;
-
-    $value =~ tr/+/ /;
-    $value =~ s/%([a-fA-F0-9][a-fA-F0-9])/pack("C", hex($1))/eg;
-
-    $value =~ s/<!--(.|\n)*-->//g;
-
-    $return->{$name} = $value;
-  }
-  return $return;
+   my $return = {}; 
+   foreach my $pair (@pairs) {
+      my ($name, $value) = split(/=/, $pair);
+      $name =~ tr/+/ /;
+      $name =~ s/%([a-fA-F0-9][a-fA-F0-9])/pack("C", hex($1))/eg;
+      $value =~ tr/+/ /;
+      $value =~ s/%([a-fA-F0-9][a-fA-F0-9])/pack("C", hex($1))/eg;
+      $return->{$name} = $value;
+   }
+   return $return;
 } 
+
 POE::Session->create(
   inline_states => {
     _start       => sub {
@@ -57,9 +44,6 @@ POE::Session->create(
         FailureEvent => '_stop',
       );
     },
-    _stop => sub {
-      delete $_[HEAP]->{listener};
-    },
     socket_birth => sub {
       my ($socket) = $_[ARG0];
       POE::Session->create(
@@ -70,7 +54,7 @@ POE::Session->create(
                #crt    => '/etc/ssl/certs/www.priv.de.crt',
                chain  => '/root/ca.crt',
                key    => '/etc/ssl/private/startssl.private.key',
-               cacrt  => '/etc/mkca-dist/ca.crt',
+               cacrt  => $mkca.'/ca.crt',
                #blockbadclientcert => 1,
                cipher => 'DHE-RSA-AES256-GCM-SHA384:AES256-SHA',
                #cacrl  => 'ca.crl', # Uncomment this, if you have a CRL file.
@@ -102,10 +86,11 @@ POE::Session->create(
                $form->{"email"} ||= 'keine@priv.de';
                $form->{"name"} ||= "keiner";
                $form->{"newSPKAC"} =~ s,[\r\n\0],,g;
-               system("rm", "-Rf", "/etc/mkca-dist/vpnclients/".$form->{"name"}."/");
-               system("mkdir", "-p", "/etc/mkca-dist/vpnclients/".$form->{"name"}); 
-               my $spkacname = "/etc/mkca-dist/vpnclients/".$form->{"name"}."/".$form->{"name"}.".spkac";
-               my $crtname = "/etc/mkca-dist/vpnclients/".$form->{"name"}."/".$form->{"name"}.".crt";
+               system("rm", "-Rf", $mkca."/vpnclients/".$form->{"name"}."/");
+               system("mkdir", "-p", $mkca."/vpnclients/".$form->{"name"}); 
+               my $spkacname = $mkca."/vpnclients/".$form->{"name"}."/".$form->{"name"}.".spkac";
+               my $crtname = $mkca."/vpnclients/".$form->{"name"}."/".$form->{"name"}.".crt";
+               # TODO:XXX:FIXME: No support for Internet Explorer, only Firefox/Chrome is supported.
                unless ($form && $form->{"newSPKAC"}) {
                   $response->push_header('Content-type', 'text/html');
                   $response->content("No key");
@@ -122,19 +107,9 @@ POE::Session->create(
                print OUT "countryName=DE\n";
                print OUT "stateOrProvinceName=st\n";
                print OUT "localityName=localityName\n";
-               chdir("/etc/mkca-dist");
-               my $cmd = ["/usr/bin/openssl", "ca", "-config", "/etc/mkca-dist/CA.cnf", "-days", "100", "-notext", "-batch", "-spkac", $spkacname, "-passin", "pass:".$capass, "-out", $crtname];
-               print "\n\n\n1\n\n";
-               print "".join(" ", map { "'".$_."'" } @$cmd)."\n";
-               print "\n\n\n1 RUN\n\n";
-               system(@$cmd);
-               #$cmd = ["/usr/bin/openssl", "x509", "-in", $crtname, "-outform", "der", "-out", $crtname.".der"];
-               #print "\n\n\n2\n\n";
-               #print "".join(" ", map { "'".$_."'" } @$cmd)."\n";
-               #system(@$cmd);
-               #print "\n\n\n2 RUN\n\n";
+               chdir($mkca);
+               my $cmd = ["/usr/bin/openssl", "ca", "-config", $mkca."/CA.cnf", "-days", "100", "-notext", "-batch", "-spkac", $spkacname, "-passin", "pass:".$capass, "-out", $crtname];
                my $file;
-               print $crtname."\n";
                my $in = '';
                open(IN, "<", $crtname) || die $!;
                while ((my $size = sysread(IN, $in, 1024*1024)) > 0 ) {
@@ -142,19 +117,17 @@ POE::Session->create(
                }
                close(IN);
                $response->content($file);
-               print "FILELEN:".length($file)."\n";
+               #print "FILELEN:".length($file)."\n";
                $heap->{socket_wheel}->put($response);
                $kernel->delay(_stop => 5);
             } else {
                my $content = '';
                if ($heap->{sslfilter}->clientCertValid()) {
-                  #$content .= "Hello <font color=green>valid</font> client Certifcate.";
                   my $certid = undef;
                   my $name = undef;
                   my $mail = undef;
                   foreach my $curcert (@certid) {
                      next unless $curcert;
-                     #$content .= $heap->{sslfilter}->hexdump($curcert->[2])."=".$curcert->[0]."<br>\n";
                      $certid = $heap->{sslfilter}->hexdump($curcert->[2]);
                      my $line = [split(/\//, $curcert->[0])];
                      my $config = {};
@@ -175,9 +148,7 @@ POE::Session->create(
                         my $curlinkfolder = $path;
                         $curlinkfolder =~ s,\/[^\/]*?$,,;
                         my $parentlinkfolder = $curlinkfolder;
-                        #print "PRE:".$parentlinkfolder."\n";
                         $parentlinkfolder =~ s,(\/|^)[^\/]*?$,,;
-                        #print "POST:".$parentlinkfolder."\n";
                         $content .= "Location: /".$path."<hr>\n";
                         if (-d $curfolder) {
                            if (opendir(DIR, $curfolder)) {
@@ -234,7 +205,7 @@ POE::Session->create(
                   $content .= '<form action="/generate/certificate" method="POST"><table>'.
                      '<tr><td>Name</td><td><input name=name></td></tr>'.
                      "<tr><td>E-Mail</td><td><input name=email></td></tr>".
-                     '<tr><td>Key</td><td><keygen challenge="replaceMe" keyparams="2048" keytype="rsa" name="newSPKAC"></keygen></td></tr>'.
+                     '<tr><td>Keysize</td><td><keygen challenge="replaceMe" keyparams="2048" keytype="rsa" name="newSPKAC"></keygen></td></tr>'.
                      '<tr><td colspan=2><input type="submit" value="Generate certifiate" /></td></tr></table></form>';
                }
                if ($buf->uri =~ m,^/debug/,) {
