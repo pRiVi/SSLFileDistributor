@@ -145,9 +145,7 @@ POE::Session->create(
                         my $path = $1;
                         $path =~ s,\.\.,\.,gi;
                         my $curfolder = $datapath."/".$certid."/".$path;
-                        my $curlinkfolder = $path;
-                        $curlinkfolder =~ s,\/[^\/]*?$,,;
-                        my $parentlinkfolder = $curlinkfolder;
+                        my $parentlinkfolder = $path;
                         $parentlinkfolder =~ s,(\/|^)[^\/]*?$,,;
                         $content .= "Location: /".$path."<hr>\n";
                         if (-d $curfolder) {
@@ -157,10 +155,10 @@ POE::Session->create(
                                  next if ($curentry =~ /^\.$/);
                                  my $curlink = undef;
                                  if ($curentry =~ /^\.\.$/) {
-                                    next unless $curlinkfolder;
+                                    next unless $path;
                                     $curlink = $parentlinkfolder;
                                  } else {
-                                    $curlink .= ($curlinkfolder ? $curlinkfolder."/" : "").$curentry;
+                                    $curlink .= ($path ? $path."/" : "").$curentry;
                                  }
                                  $content .= "<tr><td>";
                                  if (-d $curfolder."/".$curentry) {
@@ -192,6 +190,8 @@ POE::Session->create(
                               print "ERROR2: ".$!."\n";
                               $content .= "Internal error 2<br>\n";
                            }
+                        } else {
+                           $content .= $path." not found!";
                         }
                         $content .= "<hr>";
                      } else {
