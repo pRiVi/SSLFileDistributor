@@ -54,10 +54,10 @@ POE::Session->create(
           _start       => sub {
             my ($heap, $kernel, $connected_socket, $address, $port) = @_[HEAP, KERNEL, ARG0, ARG1, ARG2];
             $heap->{sslfilter} = POE::Filter::SSL->new(
-               #crt    => '/etc/ssl/certs/www.priv.de.crt',
-               chain  => '/root/ca.crt',
-               key    => '/etc/ssl/private/startssl.private.key',
-               cacrt  => $mkca.'/ca.crt',
+               #crt    => '/etc/ssl/certs/www.priv.de.crt', # <- The server certificate for your www.domain.de...
+               chain  => '/root/ca.crt', # <- ... as chain if you use startssl.
+               key    => '/etc/ssl/private/startssl.private.key', # The private key for the certificate for your www.domain.de
+               cacrt  => $mkca.'/ca.crt', # The CA certificate you just created self-sign with mkca-dist
                #blockbadclientcert => 1,
                cipher => 'DHE-RSA-AES256-GCM-SHA384:AES256-SHA',
                #cacrl  => 'ca.crl', # Uncomment this, if you have a CRL file.
