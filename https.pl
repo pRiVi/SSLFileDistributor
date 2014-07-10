@@ -235,7 +235,7 @@ POE::Session->create(
                      $content .= "Internal error parsing your client certificate.<br><br>";
                   }
                } else {
-                  $content .= "None or <font color=red>invalid</font> X:".$valid." client certificate.<br><br>Please generate one:<br><br>";
+                  $content .= "None or <font color=red>invalid</font> client certificate.<br><br>Please generate one:<br><br>";
                   $content .= '<form action="/generate/certificate" method="POST"><table>'.
                      '<tr><td>Name</td><td><input name=name></td></tr>'.
                      "<tr><td>E-Mail</td><td><input name=email></td></tr>".
