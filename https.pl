@@ -17,6 +17,7 @@ chomp($capass);
 my $datapath = "/tmp/testdata";
 my $datadir = "/data/";
 my $mkca = "/etc/mkca-dist";
+my $ssl = "/usr/bin/openssl";
 
 sub ReadForm {
    my @pairs = split(/&/, shift);
@@ -30,6 +31,18 @@ sub ReadForm {
       $return->{$name} = $value;
    }
    return $return;
+}
+
+sub readFile {
+   my $filename = shift;
+   my $file = '';
+   my $in = '';
+   open(IN, "<", $filename) || die $filename.":".$!;
+   while ((my $size = sysread(IN, $in, 1024*1024)) > 0 ) {
+      $file .= $in;
+   }
+   close(IN);
+   return $file;
 } 
 
 POE::Session->create(
@@ -87,20 +100,45 @@ POE::Session->create(
                $form->{"name"} =~ s,[^a-zA-Z\s\-\,]+,,g;
                $form->{"email"} =~ s,[^a-zA-Z\s\-\,]+,,g;
                $form->{"email"} ||= 'keine@priv.de';
-               $form->{"name"} ||= "keiner";
-               $form->{"newSPKAC"} =~ s,[\r\n\0],,g;
                system("rm", "-Rf", $mkca."/vpnclients/".$form->{"name"}."/");
                system("mkdir", "-p", $mkca."/vpnclients/".$form->{"name"}); 
                my $spkacname = $mkca."/vpnclients/".$form->{"name"}."/".$form->{"name"}.".spkac";
                my $crtname = $mkca."/vpnclients/".$form->{"name"}."/".$form->{"name"}.".crt";
                # TODO:XXX:FIXME: No support for Internet Explorer, only Firefox/Chrome is supported.
-               unless ($form && $form->{"newSPKAC"}) {
+               unless (length($form->{"name"}) > 2) {
                   $response->push_header('Content-type', 'text/html');
-                  $response->content("No key");
+                  $response->content("ERROR: No name given");
                   $heap->{socket_wheel}->put($response);
                   $kernel->delay(_stop => 1);
                   return;
                }
+               chdir($mkca);
+               unless ($form && $form->{"newSPKAC"}) {
+                  my $keyname = $mkca."/vpnclients/".$form->{"name"}."/".$form->{"name"}.".key";
+                  my $reqname = $mkca."/vpnclients/".$form->{"name"}."/".$form->{"name"}.".csr";
+                  my $p12name = $mkca."/vpnclients/".$form->{"name"}."/".$form->{"name"}.".p12";
+                  foreach my $curcmd ([$ssl, "genrsa", "-des3", "-out", $keyname, "-passout", "pass:''", "2048"],
+                                      [$ssl, "req", "-batch", "-new", "-key", $keyname, "-out", $reqname, "-config", $mkca."/CA.cnf", "-passin", "pass:''", "-subj", '/emailAddress='.$form->{"email"}.'/CN='.$form->{"name"}],
+                                      [$ssl, "ca", "-batch", "-in", $reqname, "-config", $mkca."/CA.cnf", "-out", $crtname, "-passin", "pass:".$capass],
+                                      [$ssl, "pkcs12", "-export", # "-certfile", $mkca."/ca.crt", 
+                                                                    "-clcerts", 
+                                              "-in", $crtname, "-inkey", $keyname, "-out", $p12name, "-passin", "pass:''", "-passout", "pass:"]) {
+                     print "".join(" ", map { "'".$_."'" } @$curcmd)."\n";
+                     system(@$curcmd);
+                  }
+                  if (my $file = readFile($p12name)) {
+                     $response->push_header('Content-type', 'application/x-pkcs12');
+                     $response->content($file);
+                     print "YEAH:".$p12name."\n";
+                  } else {
+                     $response->push_header('Content-type', 'text/html');
+                     $response->content("ERROR: Empty key\n");
+                  }
+                  $heap->{socket_wheel}->put($response);
+                  $kernel->delay(_stop => 1);
+                  return;
+               }
+               $form->{"newSPKAC"} =~ s,[\r\n\0],,g;
                $response->push_header('Content-type', 'application/x-x509-user-cert');
                open(OUT, ">", $spkacname) || die $!;
                print OUT "SPKAC=".$form->{"newSPKAC"}."\n";
@@ -110,22 +148,17 @@ POE::Session->create(
                print OUT "countryName=DE\n";
                print OUT "stateOrProvinceName=st\n";
                print OUT "localityName=localityName\n";
-               chdir($mkca);
-               my $cmd = ["/usr/bin/openssl", "ca", "-config", $mkca."/CA.cnf", "-days", "100", "-notext", "-batch", "-spkac", $spkacname, "-passin", "pass:".$capass, "-out", $crtname];
-               my $file;
-               my $in = '';
-               open(IN, "<", $crtname) || die $!;
-               while ((my $size = sysread(IN, $in, 1024*1024)) > 0 ) {
-                  $file .= $in;
-               }
-               close(IN);
-               $response->content($file);
+               my $cmd = [$ssl, "ca", "-config", $mkca."/CA.cnf", "-days", "100", "-notext", "-batch", "-spkac", $spkacname, "-passin", "pass:".$capass, "-out", $crtname];
+               print "".join(" ", map { "'".$_."'" } @$cmd)."\n";
+               system(@$cmd);
+               $response->content(readFile($crtname));
                #print "FILELEN:".length($file)."\n";
                $heap->{socket_wheel}->put($response);
                $kernel->delay(_stop => 5);
             } else {
                my $content = '';
-               if ($heap->{sslfilter}->clientCertValid()) {
+               my $valid = $heap->{sslfilter}->clientCertValid();
+               if ($valid) {
                   my $certid = undef;
                   my $name = undef;
                   my $mail = undef;
@@ -204,7 +237,7 @@ POE::Session->create(
                      $content .= "Internal error parsing your client certificate.<br><br>";
                   }
                } else {
-                  $content .= "None or <font color=red>invalid</font> client certificate.<br><br>Please generate one:<br><br>";
+                  $content .= "None or <font color=red>invalid</font> X:".$valid." client certificate.<br><br>Please generate one:<br><br>";
                   $content .= '<form action="/generate/certificate" method="POST"><table>'.
                      '<tr><td>Name</td><td><input name=name></td></tr>'.
                      "<tr><td>E-Mail</td><td><input name=email></td></tr>".
