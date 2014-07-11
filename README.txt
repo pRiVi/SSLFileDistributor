@@ -1,4 +1,4 @@
-This software implements a HTTPS server and allows the user to create client certificates for the browser in the browser.
+This software implements a HTTPS server with browser based client certfication generation.
 
 After this you can create a directory tree per certificate id and allow the client to browse it and download files.
 
