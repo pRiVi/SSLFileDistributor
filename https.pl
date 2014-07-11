@@ -104,7 +104,6 @@ POE::Session->create(
                system("mkdir", "-p", $mkca."/vpnclients/".$form->{"name"}); 
                my $spkacname = $mkca."/vpnclients/".$form->{"name"}."/".$form->{"name"}.".spkac";
                my $crtname = $mkca."/vpnclients/".$form->{"name"}."/".$form->{"name"}.".crt";
-               # TODO:XXX:FIXME: No support for Internet Explorer, only Firefox/Chrome is supported.
                unless (length($form->{"name"}) > 2) {
                   $response->push_header('Content-type', 'text/html');
                   $response->content("ERROR: No name given");
