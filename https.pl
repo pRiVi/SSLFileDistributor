@@ -12,7 +12,9 @@ use POE qw(
    Filter::HTTPD
 );
 
-my $capass = `cat /root/filed/capw.txt`;
+my $DAYS = 365; # WIe lange das Zertifikat gilt.
+
+my $capass = `cat capw.txt`;
 chomp($capass);
 my $datapath = "/tmp/testdata";
 my $datadir = "/data/";
@@ -50,7 +52,7 @@ POE::Session->create(
     _start       => sub {
       my $heap = $_[HEAP];
       $heap->{listener} = POE::Wheel::SocketFactory->new(
-        BindAddress  => '86.110.76.147',
+        BindAddress  => '0.0.0.0',
         BindPort     => 443,
         Reuse        => 'yes',
         SuccessEvent => 'socket_birth',
@@ -118,6 +120,7 @@ POE::Session->create(
                   my $p12name = $mkca."/vpnclients/".$form->{"name"}."/".$form->{"name"}.".p12";
                   foreach my $curcmd ([$ssl, "genrsa", "-des3", "-out", $keyname, "-passout", "pass:''", "2048"],
                                       [$ssl, "req", "-batch", "-new", "-key", $keyname, "-out", $reqname, "-config", $mkca."/CA.cnf", "-passin", "pass:''", "-subj", '/emailAddress='.$form->{"email"}.'/CN='.$form->{"name"}],
+                                      #[$ssl, "x509", "-fingerprint", "-sha256", "-in", $reqname, "-req", "-signkey", $keyname, "-extensions", "v3_req", "-extfile", "openssl.cfg", "-out", $reqname],
                                       [$ssl, "ca", "-batch", "-in", $reqname, "-config", $mkca."/CA.cnf", "-out", $crtname, "-passin", "pass:".$capass],
                                       [$ssl, "pkcs12", "-export", # "-certfile", $mkca."/ca.crt", 
                                                                     "-clcerts", 
@@ -146,7 +149,7 @@ POE::Session->create(
                print OUT "countryName=DE\n";
                print OUT "stateOrProvinceName=st\n";
                print OUT "localityName=localityName\n";
-               my $cmd = [$ssl, "ca", "-config", $mkca."/CA.cnf", "-days", "100", "-notext", "-batch", "-spkac", $spkacname, "-passin", "pass:".$capass, "-out", $crtname];
+               my $cmd = [$ssl, "ca", "-config", $mkca."/CA.cnf", "-days", $DAYS, "-notext", "-batch", "-spkac", $spkacname, "-passin", "pass:".$capass, "-out", $crtname];
                print "".join(" ", map { "'".$_."'" } @$cmd)."\n";
                system(@$cmd);
                $response->content(readFile($crtname));
